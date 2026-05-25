@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "@vercel/blob": "^0.27.3",
+    "formidable": "^3.5.2"
+  },
+  "devDependencies": {
+    "vercel": "^39.1.0"
+  }
+}
