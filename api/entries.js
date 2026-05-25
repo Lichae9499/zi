@@ -1,4 +1,4 @@
-import { list, put } from '@vercel/blob';
+import { list, put, del } from '@vercel/blob';
 import busboy from 'busboy';
 
 export const config = {
@@ -182,12 +182,44 @@ async function updateEntry(req, res) {
   res.status(200).json({ entry });
 }
 
+async function deleteEntry(req, res) {
+  let id;
+  try {
+    const body = await new Promise((resolve, reject) => {
+      let raw = '';
+      req.on('data', chunk => { raw += chunk; });
+      req.on('end', () => { try { resolve(JSON.parse(raw)); } catch { resolve({}); } });
+      req.on('error', reject);
+    });
+    id = String(body.id || '').trim();
+  } catch {
+    id = '';
+  }
+
+  if (!id) { res.status(400).json({ error: '缺少 id' }); return; }
+
+  const { blobs } = await list({ prefix: `entries/${id}.json`, limit: 1 });
+  if (!blobs.length) { res.status(404).json({ error: '未找到该记录' }); return; }
+
+  const result = await fetch(blobs[0].url, { cache: 'no-store' });
+  if (result.ok) {
+    const entry = await result.json();
+    const photoUrls = (entry.photos || []).map(p => p.url).filter(Boolean);
+    if (photoUrls.length) await del(photoUrls);
+  }
+
+  await del(blobs[0].url);
+  res.status(200).json({ deleted: id });
+}
+
+
 export default async function handler(req, res) {
   try {
     res.setHeader('Cache-Control', 'no-store');
     if (req.method === 'GET') { await getEntries(res); return; }
     if (req.method === 'POST') { await createEntry(req, res); return; }
     if (req.method === 'PUT') { await updateEntry(req, res); return; }
+    if (req.method === 'DELETE') { await deleteEntry(req, res); return; }
     res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('[entries]', error);
